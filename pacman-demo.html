@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pacman Demo</title>
+<style>
+  body {
+    margin: 0;
+    background: #0a0a1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #ffcc00;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 1.5em;
+    text-shadow: 0 0 10px #ffcc00;
+    margin-bottom: 10px;
+  }
+  #info {
+    display: flex;
+    gap: 30px;
+    font-size: 1.2em;
+    margin-bottom: 8px;
+  }
+  #lives { color: #ff4444; }
+  canvas {
+    border: 2px solid #3333aa;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(60, 60, 200, 0.3);
+    image-rendering: crisp-edges;
+  }
+  #message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2em;
+    text-align: center;
+    text-shadow: 0 0 20px currentColor;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 10;
+  }
+  #message.hidden { opacity: 0; }
+  .controls { margin-top: 10px; font-size: 0.8em; color: #6666aa; }
+</style>
+</head>
+<body>
+  <h1>★ PACMAN DEMO ★</h1>
+  <div id="info">
+    <div>Poäng: <span id="score">0</span></div>
+    <div>Liv: <span id="lives">❤❤❤</span></div>
+  </div>
+  <canvas id="game" width="420" height="420"></canvas>
+  <div id="message" class="hidden"></div>
+  <p class="controls">Piltangenter för att röra • R för att starta om</p>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── Konfiguration ──────────────────────────────────────────────
+  const TILE = 20;
+  const COLS = 21;
+  const ROWS = 21;
+
+  // 0 = vägg, 1 = dot, 2 = power-pellet, 3 = tomt golv
+  // 21x21 labyrint — fullt sammanhängd, alla dots nåbara (BFS-verifierad)
+  const MAZE_TEMPLATE = [
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    [0,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0],
+    [0,1,0,0,0,1,1,0,0,0,1,1,0,0,0,1,0,0,0,1,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,1,0,0,0,1,1,0,3,3,0,3,3,0,1,1,0,0,0,1,0],
+    [0,1,1,1,1,1,1,1,0,3,3,3,0,1,1,1,1,1,1,1,0],
+    [0,1,1,1,0,1,1,1,3,3,3,3,3,1,1,1,0,1,1,1,0],
+    [0,1,1,1,1,1,1,1,0,3,3,3,0,1,1,1,1,1,1,1,0],
+    [0,1,0,0,0,1,1,0,3,3,0,3,3,0,1,1,0,0,0,1,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,0,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0],
+    [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+    [0,1,0,0,0,1,1,0,0,0,1,1,0,0,0,1,0,0,0,1,0],
+    [0,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,0],
+    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  ].map(row => row.slice());
+
+  // ── Canvas ─────────────────────────────────────────────────────
+  const canvas = document.getElementById('game');
+  canvas.width = COLS * TILE;
+  canvas.height = ROWS * TILE;
+  const ctx = canvas.getContext('2d');
+
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+  const messageEl = document.getElementById('message');
+
+  // ── Ljud (Web Audio API) ───────────────────────────────────────
+  let audioCtx = null;
+  function initAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* ljud inte tillgängligt */ }
+    }
+  }
+
+  function beep(freq, duration, type = 'square', volume = 0.15) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function chirp(freqStart, freqEnd, duration, type = 'square', volume = 0.12) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freqStart, audioCtx.currentTime);
+    osc.frequency.linearRampToValueAtTime(freqEnd, audioCtx.currentTime + duration);
+    gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function noiseBurst(duration, volume = 0.1) {
+    if (!audioCtx) return;
+    const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const src = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    src.buffer = buffer;
+    gain.gain.value = volume;
+    src.connect(gain);
+    gain.connect(audioCtx.destination);
+    src.start();
+  }
+
+  // Ljudfunktioner
+  const SFX = {
+    eatDot: () => beep(880 + Math.random() * 200, 0.05, 'square', 0.08),
+    eatPellet: () => chirp(400, 1200, 0.3, 'sine', 0.15),
+    death: () => {
+      chirp(800, 80, 0.6, 'sawtooth', 0.2);
+      setTimeout(() => noiseBurst(0.3, 0.08), 600);
+    },
+    ghostEat: () => chirp(200, 1000, 0.4, 'triangle', 0.18),
+    win: () => {
+      [523, 659, 784, 1047].forEach((f, i) => {
+        setTimeout(() => beep(f, 0.2, 'square', 0.15), i * 150);
+      });
+    },
+    start: () => {
+      [440, 554, 659].forEach((f, i) => {
+        setTimeout(() => beep(f, 0.15, 'square', 0.12), i * 120);
+      });
+    },
+  };
+
+  // ── Spelstatus ─────────────────────────────────────────────────
+  let maze = [];
+  let pacman, ghosts, score, lives, dotsLeft;
+  let gameRunning, gameOver, won;
+  let powerTimer = 0;
+  let frameCount = 0;
+  let respawnTimer = 0;
+
+  // ── Rörelsehastighet (frames per tile-steg) ──────────────────────
+  // Lägre = snabbare. Pacman är snabbare än spökena.
+  const PACMAN_SPEED = 14;        // ~4,3 tiles/sek
+  const GHOST_SPEED = 18;         // ~3,3 tiles/sek
+  const GHOST_SCARED_SPEED = 28;  // ~2,1 tiles/sek (rädda spöken är långsamma)
+  let pacmanMoveTimer = PACMAN_SPEED;
+
+  function initMaze() {
+    maze = MAZE_TEMPLATE.map(row => row.slice());
+    dotsLeft = 0;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (maze[r][c] === 1 || maze[r][c] === 2) dotsLeft++;
+      }
+    }
+  }
+
+  function resetEntities() {
+    // Pacman startar i mitten (spök-pen är öppen)
+    pacman = { x: 10, y: 10, dx: 0, dy: 0, nextDx: 0, nextDy: 0, mouthAngle: 0.2, mouthDir: 1 };
+    // Spöken startar på dot-tile i varje hörn
+    const ghostColors = ['#ff4444', '#ff77ff', '#44ffff', '#ffaa44'];
+    const ghostStarts = [[3,3],[17,3],[3,17],[17,17]];
+    ghosts = ghostColors.map((color, i) => ({
+      x: ghostStarts[i][0],
+      y: ghostStarts[i][1],
+      dx: 0, dy: 0,
+      color: color,
+      scared: false,
+      moveDelay: i * 40, // fördröjd start
+      moveTimer: GHOST_SPEED,
+    }));
+    respawnTimer = 0;
+  }
+
+  function startGame() {
+    initAudio();
+    initMaze();
+    resetEntities();
+    score = 0;
+    lives = 3;
+    powerTimer = 0;
+    gameRunning = true;
+    gameOver = false;
+    won = false;
+    updateHUD();
+    hideMessage();
+    SFX.start();
+  }
+
+  // ── Rörelse ────────────────────────────────────────────────────
+  function isWall(x, y) {
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return true;
+    return maze[y][x] === 0;
+  }
+
+  function canMove(x, y, dx, dy) {
+    return !isWall(x + dx, y + dy);
+  }
+
+  // Spök-AI: välj ny riktning vid varje ruta, undvik att vända 180°
+  function moveGhost(g) {
+    const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+    const reverseKey = `${-g.dx},${-g.dy}`;
+
+    let valid = dirs.filter(([dx, dy]) => {
+      const key = `${dx},${dy}`;
+      // Tillåt vändning om spöket står stilla
+      if (g.dx === 0 && g.dy === 0) return canMove(g.x, g.y, dx, dy);
+      // Förhindra vändning 180°
+      if (key === reverseKey) return false;
+      return canMove(g.x, g.y, dx, dy);
+    });
+
+    if (valid.length === 0) {
+      // Tillåt vändning om ingen annan väg finns
+      valid = dirs.filter(([dx, dy]) => canMove(g.x, g.y, dx, dy));
+    }
+    if (valid.length === 0) return;
+
+    if (g.scared) {
+      // Fly från Pacman — välj riktning som maximerar avståndet
+      const dist = (dx, dy) => Math.abs(g.x + dx - pacman.x) + Math.abs(g.y + dy - pacman.y);
+      valid.sort((a, b) => dist(b[0], b[1]) - dist(a[0], a[1]));
+    } else {
+      // Mot Pacman med 70% chans, annars slump
+      if (Math.random() < 0.7) {
+        const dist = (dx, dy) => Math.abs(g.x + dx - pacman.x) + Math.abs(g.y + dy - pacman.y);
+        valid.sort((a, b) => dist(a[0], a[1]) - dist(b[0], b[1]));
+      } else {
+        valid.sort(() => Math.random() - 0.5);
+      }
+    }
+
+    const [dx, dy] = valid[0];
+    g.dx = dx;
+    g.dy = dy;
+    g.x += dx;
+    g.y += dy;
+  }
+
+  // ── Kollision & logik ──────────────────────────────────────────
+  function update() {
+    frameCount++;
+    if (!gameRunning) return;
+
+    // Respawn-fördröjning efter att ha förlorat ett liv
+    if (respawnTimer > 0) {
+      respawnTimer--;
+      return;
+    }
+
+    // Pacman-rörelse (styrd av timer)
+    pacmanMoveTimer--;
+    if (pacmanMoveTimer <= 0) {
+      pacmanMoveTimer = PACMAN_SPEED;
+
+      if (pacman.nextDx !== 0 || pacman.nextDy !== 0) {
+        if (canMove(pacman.x, pacman.y, pacman.nextDx, pacman.nextDy)) {
+          pacman.dx = pacman.nextDx;
+          pacman.dy = pacman.nextDy;
+          pacman.nextDx = 0;
+          pacman.nextDy = 0;
+        }
+      }
+      if (canMove(pacman.x, pacman.y, pacman.dx, pacman.dy)) {
+        pacman.x += pacman.dx;
+        pacman.y += pacman.dy;
+      } else {
+        pacman.dx = 0;
+        pacman.dy = 0;
+      }
+
+      // Ät dots
+      const tile = maze[pacman.y]?.[pacman.x];
+      if (tile === 1) {
+        maze[pacman.y][pacman.x] = 3;
+        score += 10;
+        dotsLeft--;
+        SFX.eatDot();
+        updateHUD();
+      } else if (tile === 2) {
+        maze[pacman.y][pacman.x] = 3;
+        score += 50;
+        dotsLeft--;
+        powerTimer = 240; // ca 4 sekunder vid 60fps
+        ghosts.forEach(g => g.scared = true);
+        SFX.eatPellet();
+        updateHUD();
+      }
+    }
+
+    // Vinst
+    if (dotsLeft <= 0) {
+      won = true;
+      gameRunning = false;
+      SFX.win();
+      showMessage('🎉 DU VANN! 🎉\nTryck R för att spela igen', '#44ff44');
+      return;
+    }
+
+    // Spök-rörelse (varje spök har egen timer — långsammare än Pacman)
+    ghosts.forEach(g => {
+      if (g.moveDelay > 0) {
+        g.moveDelay--;
+        return;
+      }
+      g.moveTimer = (g.moveTimer || 0) - 1;
+      const speed = g.scared ? GHOST_SCARED_SPEED : GHOST_SPEED;
+      if (g.moveTimer <= 0) {
+        g.moveTimer = speed;
+        moveGhost(g);
+      }
+    });
+
+    // Power timer
+    if (powerTimer > 0) {
+      powerTimer--;
+      if (powerTimer === 0) {
+        ghosts.forEach(g => g.scared = false);
+      }
+    }
+
+    // Kollision med spöken
+    for (const g of ghosts) {
+      if (g.moveDelay > 0) continue;
+      if (g.x === pacman.x && g.y === pacman.y) {
+        if (g.scared) {
+          // Ät spöke
+          score += 200;
+          g.x = 3;
+          g.y = 3;
+          g.dx = 0;
+          g.dy = 0;
+          g.scared = false;
+          g.moveDelay = 60;
+          SFX.ghostEat();
+          updateHUD();
+        } else {
+          // Dö
+          lives--;
+          SFX.death();
+          updateHUD();
+          if (lives <= 0) {
+            gameOver = true;
+            gameRunning = false;
+            showMessage('💀 GAME OVER 💀\nTryck R för att spela igen', '#ff4444');
+          } else {
+            resetEntities();
+            respawnTimer = 90; // ca 1,5 sekunders paus
+            showMessage('Förlorade ett liv!', '#ff8844');
+            setTimeout(() => { if (gameRunning) hideMessage(); }, 1200);
+          }
+          return;
+        }
+      }
+    }
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────
+  function draw() {
+    // Bakgrund
+    ctx.fillStyle = '#0a0a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Labyrint
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * TILE;
+        const y = r * TILE;
+        const t = maze[r][c];
+        if (t === 0) {
+          // Vägg
+          ctx.fillStyle = '#1a1a8a';
+          ctx.fillRect(x, y, TILE, TILE);
+          ctx.fillStyle = '#3333cc';
+          ctx.fillRect(x + 2, y + 2, TILE - 4, TILE - 4);
+        } else if (t === 1) {
+          // Dot
+          ctx.fillStyle = '#ffcc88';
+          ctx.beginPath();
+          ctx.arc(x + TILE/2, y + TILE/2, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (t === 2) {
+          // Power pellet (pulserande)
+          const pulse = Math.sin(frameCount * 0.15) * 2 + 5;
+          ctx.fillStyle = '#ffcc00';
+          ctx.beginPath();
+          ctx.arc(x + TILE/2, y + TILE/2, pulse, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Pacman
+    drawPacman(pacman.x * TILE + TILE/2, pacman.y * TILE + TILE/2);
+
+    // Spöken
+    ghosts.forEach(g => {
+      if (g.moveDelay > 20) return; // göm nyligen ätna spöken under återställning
+      drawGhost(g.x * TILE + TILE/2, g.y * TILE + TILE/2, g.color, g.scared);
+    });
+  }
+
+  function drawPacman(cx, cy) {
+    // Mun-animation
+    if (pacman.dx !== 0 || pacman.dy !== 0) {
+      pacman.mouthAngle += pacman.mouthDir * 0.06;
+      if (pacman.mouthAngle > 0.4) pacman.mouthDir = -1;
+      if (pacman.mouthAngle < 0.05) pacman.mouthDir = 1;
+    }
+
+    let angle = 0;
+    if (pacman.dx === 1) angle = 0;
+    else if (pacman.dx === -1) angle = Math.PI;
+    else if (pacman.dy === -1) angle = -Math.PI / 2;
+    else if (pacman.dy === 1) angle = Math.PI / 2;
+
+    ctx.fillStyle = '#ffee00';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, TILE/2 - 1, angle + pacman.mouthAngle, angle - pacman.mouthAngle + Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Öga
+    ctx.fillStyle = '#000';
+    const eyeOffsetX = pacman.dx === 1 ? 2 : pacman.dx === -1 ? -2 : 0;
+    const eyeOffsetY = pacman.dy === 1 ? 2 : pacman.dy === -1 ? -2 : -2;
+    ctx.beginPath();
+    ctx.arc(cx + eyeOffsetX, cy + eyeOffsetY - 3, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawGhost(cx, cy, color, scared) {
+    const r = TILE / 2 - 1;
+    const bodyColor = scared ? '#3333ff' : color;
+
+    // Kropp
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 1, r, Math.PI, 0);
+    ctx.lineTo(cx + r, cy + r);
+    // Taggig botten
+    const teeth = 4;
+    const teethW = (r * 2) / teeth;
+    for (let i = 0; i < teeth; i++) {
+      const x1 = cx + r - i * teethW;
+      const x2 = cx + r - (i + 1) * teethW;
+      const yMid = cy + r - 4;
+      ctx.lineTo(x1, yMid);
+      ctx.lineTo(x2, cy + r);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Ögon
+    if (scared) {
+      // Rädda ögon (vit med svart pupill)
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy - 3, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy - 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy - 3, 1, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy - 3, 1, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Normala ögon som tittar mot Pacman
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy - 3, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy - 3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0000aa';
+      const lx = Math.sign(pacman.x - Math.floor(cx / TILE));
+      const ly = Math.sign(pacman.y - Math.floor(cy / TILE));
+      ctx.beginPath();
+      ctx.arc(cx - 3 + lx, cy - 3 + ly, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx + 3 + lx, cy - 3 + ly, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ── HUD ────────────────────────────────────────────────────────
+  function updateHUD() {
+    scoreEl.textContent = score;
+    const hearts = '❤'.repeat(Math.max(0, lives));
+    livesEl.textContent = hearts || '—';
+  }
+
+  function showMessage(text, color) {
+    messageEl.textContent = text;
+    messageEl.style.color = color;
+    messageEl.style.whiteSpace = 'pre-line';
+    messageEl.classList.remove('hidden');
+  }
+
+  function hideMessage() {
+    messageEl.classList.add('hidden');
+  }
+
+  // ── Input ──────────────────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    initAudio();
+    if (e.key === 'r' || e.key === 'R') {
+      startGame();
+      e.preventDefault();
+      return;
+    }
+    if (!gameRunning && (gameOver || won)) return;
+    if (!gameRunning) {
+      startGame();
+      e.preventDefault();
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowUp':    pacman.nextDx = 0;  pacman.nextDy = -1; break;
+      case 'ArrowDown':  pacman.nextDx = 0;  pacman.nextDy = 1;  break;
+      case 'ArrowLeft':  pacman.nextDx = -1; pacman.nextDy = 0;  break;
+      case 'ArrowRight': pacman.nextDx = 1;  pacman.nextDy = 0;  break;
+    }
+    e.preventDefault();
+  });
+
+  // ── Spelloop ───────────────────────────────────────────────────
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ── Start ──────────────────────────────────────────────────────
+  startGame();
+  loop();
+})();
+</script>
+</body>
+</html>

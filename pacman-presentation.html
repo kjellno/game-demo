@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pacman Demo — Presentation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+  :root {
+    --bg: #0a0a1a;
+    --yellow: #ffcc00;
+    --yellow-bright: #ffee00;
+    --blue: #3333cc;
+    --blue-bright: #5555ff;
+    --red: #ff4444;
+    --pink: #ff77ff;
+    --cyan: #44ffff;
+    --orange: #ffaa44;
+    --text: #ccccdd;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Press Start 2P', 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  .slide {
+    width: 100%;
+    max-width: 1100px;
+    padding: 40px 50px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  /* ── Titelsektion ─────────────────────────────────────── */
+  .title-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .pacman-icon {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    animation: chomp 0.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes chomp {
+    from { clip-path: polygon(100% 50%, 100% 0%, 0% 0%, 0% 100%, 100% 100%); }
+    to   { clip-path: polygon(100% 50%, 70% 20%, 0% 0%, 0% 100%, 70% 80%); }
+  }
+
+  h1 {
+    font-size: 1.8em;
+    color: var(--yellow-bright);
+    text-shadow: 0 0 12px rgba(255, 238, 0, 0.5);
+    letter-spacing: 2px;
+  }
+
+  .subtitle {
+    font-size: 0.7em;
+    color: var(--blue-bright);
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+
+  /* ── Huvudinnehåll ────────────────────────────────────── */
+  .content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+
+  .panel {
+    background: rgba(20, 20, 60, 0.5);
+    border: 2px solid var(--blue);
+    border-radius: 10px;
+    padding: 24px;
+  }
+
+  .panel h2 {
+    font-size: 0.8em;
+    color: var(--yellow);
+    margin-bottom: 16px;
+    text-shadow: 0 0 8px rgba(255, 204, 0, 0.3);
+  }
+
+  .feature-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .feature-list li {
+    font-size: 0.55em;
+    line-height: 1.8;
+    color: var(--text);
+    padding-left: 22px;
+    position: relative;
+  }
+
+  .feature-list li::before {
+    content: '●';
+    color: var(--yellow);
+    position: absolute;
+    left: 0;
+    font-size: 1.3em;
+    top: -2px;
+  }
+
+  .feature-list li.power::before { content: '⬤'; color: var(--yellow-bright); }
+
+  .feature-list li strong {
+    color: var(--cyan);
+  }
+
+  .feature-list li.red strong { color: var(--red); }
+  .feature-list li.pink strong { color: var(--pink); }
+  .feature-list li.orange strong { color: var(--orange); }
+
+  /* ── Ljudsektion ──────────────────────────────────────── */
+  .sfx-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .sfx-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.5em;
+    color: var(--text);
+  }
+
+  .sfx-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .sfx-icon.dot    { background: #ffcc88; color: #000; }
+  .sfx-icon.pellet { background: var(--yellow-bright); color: #000; }
+  .sfx-icon.ghost  { background: var(--cyan); color: #000; }
+  .sfx-icon.death  { background: var(--red); color: #fff; }
+  .sfx-icon.win    { background: #44ff44; color: #000; }
+  .sfx-icon.start  { background: var(--blue-bright); color: #fff; }
+
+  /* ── Spökparad ────────────────────────────────────────── */
+  .ghost-row {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 4px;
+  }
+
+  .ghost-card {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ghost-svg {
+    width: 40px;
+    height: 40px;
+    animation: float 1.2s ease-in-out infinite alternate;
+  }
+
+  .ghost-card:nth-child(2) .ghost-svg { animation-delay: 0.2s; }
+  .ghost-card:nth-child(3) .ghost-svg { animation-delay: 0.4s; }
+  .ghost-card:nth-child(4) .ghost-svg { animation-delay: 0.6s; }
+
+  @keyframes float {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-6px); }
+  }
+
+  .ghost-card span {
+    font-size: 0.45em;
+    color: var(--text);
+  }
+
+  /* ── Kontroller ───────────────────────────────────────── */
+  .controls-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--blue-bright);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--yellow);
+    background: rgba(50, 50, 100, 0.5);
+    box-shadow: 0 2px 0 var(--blue);
+  }
+
+  .key-group {
+    display: grid;
+    grid-template-columns: 40px 40px 40px;
+    grid-template-rows: 40px 40px;
+    gap: 4px;
+  }
+
+  .key-group .k-up    { grid-area: 1 / 2; }
+  .key-group .k-left  { grid-area: 2 / 1; }
+  .key-group .k-down  { grid-area: 2 / 2; }
+  .key-group .k-right { grid-area: 2 / 3; }
+
+  .controls-text {
+    font-size: 0.55em;
+    line-height: 2;
+    color: var(--text);
+  }
+
+  .controls-text strong { color: var(--yellow); }
+
+  /* ── Footer ───────────────────────────────────────────── */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid rgba(60, 60, 200, 0.3);
+  }
+
+  .footer-left, .footer-right {
+    font-size: 0.5em;
+    color: #5555aa;
+  }
+
+  .tech-badges {
+    display: flex;
+    gap: 8px;
+  }
+
+  .badge {
+    font-size: 0.5em;
+    padding: 4px 10px;
+    border: 1px solid var(--blue);
+    border-radius: 4px;
+    color: var(--blue-bright);
+  }
+
+  /* ── Stjärnor i bakgrunden ─────────────────────────────── */
+  .stars {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  .star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    opacity: 0.3;
+    animation: twinkle 3s ease-in-out infinite;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.15; }
+    50%      { opacity: 0.5; }
+  }
+
+  /* ── Responsiv ────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .content { grid-template-columns: 1fr; }
+    h1 { font-size: 1.3em; }
+    .slide { padding: 24px; gap: 20px; }
+  }
+</style>
+</head>
+<body>
+  <!-- Bakgrundsstjärnor -->
+  <div class="stars" id="stars"></div>
+
+  <div class="slide">
+    <!-- Titel -->
+    <div class="title-section">
+      <svg class="pacman-icon" viewBox="0 0 56 56">
+        <circle cx="28" cy="28" r="26" fill="#ffee00" />
+        <circle cx="34" cy="18" r="3" fill="#000" />
+      </svg>
+      <div>
+        <h1>★ PACMAN DEMO ★</h1>
+        <div class="subtitle">En variant på Pacman med ljudeffekter — byggd i ren HTML5 &amp; JavaScript</div>
+      </div>
+    </div>
+
+    <!-- Huvudinnehåll -->
+    <div class="content">
+      <!-- Vänster panel: Funktioner -->
+      <div class="panel">
+        <h2>FUNKTIONER</h2>
+        <ul class="feature-list">
+          <li><strong>21×21 labyrint</strong> — 270 dots &amp; 4 power-pellets</li>
+          <li><strong>4 spöken</strong> med jakt-AI (70% jakt, 30% slump)</li>
+          <li class="power"><strong>Power-pellets</strong> gör spökena ätbara i ~4 sek</li>
+          <li class="red"><strong>3 liv</strong> — respawn efter varje död</li>
+          <li class="pink"><strong>Mun-animation</strong> &amp; spöken som tittar mot spelaren</li>
+          <li class="orange"><strong>Vinst</strong> när alla dots är uppätna</li>
+          <li>Tryck <strong>R</strong> för att starta om</li>
+        </ul>
+      </div>
+
+      <!-- Höger panel: Ljudeffekter -->
+      <div class="panel">
+        <h2>LJUDEFFEKTER</h2>
+        <div class="sfx-grid">
+          <div class="sfx-item">
+            <div class="sfx-icon dot">●</div>
+            <span>Dot — blipp 880 Hz</span>
+          </div>
+          <div class="sfx-item">
+            <div class="sfx-icon pellet">⬤</div>
+            <span>Pellet — svep 400→1200 Hz</span>
+          </div>
+          <div class="sfx-item">
+            <div class="sfx-icon ghost">G</div>
+            <span>Spöke — glissando 200→1000</span>
+          </div>
+          <div class="sfx-item">
+            <div class="sfx-icon death">X</div>
+            <span>Död — sågtand + brus</span>
+          </div>
+          <div class="sfx-item">
+            <div class="sfx-icon win">♪</div>
+            <span>Vinst — melodi C-E-G-C</span>
+          </div>
+          <div class="sfx-item">
+            <div class="sfx-icon start">▶</div>
+            <span>Start — tre toner</span>
+          </div>
+        </div>
+        <p style="font-size:0.45em; color:#5555aa; margin-top:14px; line-height:1.8;">
+          Allt ljud genereras i realtid via Web Audio API — inga externa ljudfiler.
+        </p>
+      </div>
+    </div>
+
+    <!-- Spökparad -->
+    <div class="panel" style="text-align:center;">
+      <h2>MÖT SPOKENA</h2>
+      <div class="ghost-row">
+        <div class="ghost-card">
+          <svg class="ghost-svg" viewBox="0 0 40 40">
+            <path d="M5,20 A15,15 0 0 1 35,20 L35,35 L30,30 L25,35 L20,30 L15,35 L10,30 L5,35 Z" fill="#ff4444" />
+            <circle cx="14" cy="18" r="3" fill="#fff" /><circle cx="26" cy="18" r="3" fill="#fff" />
+            <circle cx="15" cy="19" r="1.5" fill="#0000aa" /><circle cx="27" cy="19" r="1.5" fill="#0000aa" />
+          </svg>
+          <span style="color:#ff4444;">Blinky</span>
+        </div>
+        <div class="ghost-card">
+          <svg class="ghost-svg" viewBox="0 0 40 40">
+            <path d="M5,20 A15,15 0 0 1 35,20 L35,35 L30,30 L25,35 L20,30 L15,35 L10,30 L5,35 Z" fill="#ff77ff" />
+            <circle cx="14" cy="18" r="3" fill="#fff" /><circle cx="26" cy="18" r="3" fill="#fff" />
+            <circle cx="15" cy="19" r="1.5" fill="#0000aa" /><circle cx="27" cy="19" r="1.5" fill="#0000aa" />
+          </svg>
+          <span style="color:#ff77ff;">Pinky</span>
+        </div>
+        <div class="ghost-card">
+          <svg class="ghost-svg" viewBox="0 0 40 40">
+            <path d="M5,20 A15,15 0 0 1 35,20 L35,35 L30,30 L25,35 L20,30 L15,35 L10,30 L5,35 Z" fill="#44ffff" />
+            <circle cx="14" cy="18" r="3" fill="#fff" /><circle cx="26" cy="18" r="3" fill="#fff" />
+            <circle cx="15" cy="19" r="1.5" fill="#0000aa" /><circle cx="27" cy="19" r="1.5" fill="#0000aa" />
+          </svg>
+          <span style="color:#44ffff;">Inky</span>
+        </div>
+        <div class="ghost-card">
+          <svg class="ghost-svg" viewBox="0 0 40 40">
+            <path d="M5,20 A15,15 0 0 1 35,20 L35,35 L30,30 L25,35 L20,30 L15,35 L10,30 L5,35 Z" fill="#ffaa44" />
+            <circle cx="14" cy="18" r="3" fill="#fff" /><circle cx="26" cy="18" r="3" fill="#fff" />
+            <circle cx="15" cy="19" r="1.5" fill="#0000aa" /><circle cx="27" cy="19" r="1.5" fill="#0000aa" />
+          </svg>
+          <span style="color:#ffaa44;">Clyde</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Kontroller -->
+    <div class="controls-section">
+      <div class="key-group">
+        <div class="key k-up">↑</div>
+        <div class="key k-left">←</div>
+        <div class="key k-down">↓</div>
+        <div class="key k-right">→</div>
+      </div>
+      <div class="controls-text">
+        <strong>Piltangenter</strong> — styra Pacman<br>
+        <strong>R</strong> — starta om
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-left">Pacman Demo — Skapat som en teknikdemo</div>
+      <div class="tech-badges">
+        <span class="badge">HTML5 Canvas</span>
+        <span class="badge">Web Audio API</span>
+        <span class="badge">Vanilla JS</span>
+      </div>
+      <div class="footer-right">1 / 1</div>
+    </div>
+  </div>
+
+  <!-- Generera bakgrundsstjärnor -->
+  <script>
+    const starsContainer = document.getElementById('stars');
+    for (let i = 0; i < 60; i++) {
+      const star = document.createElement('div');
+      star.className = 'star';
+      star.style.left = Math.random() * 100 + '%';
+      star.style.top = Math.random() * 100 + '%';
+      star.style.animationDelay = Math.random() * 3 + 's';
+      star.style.animationDuration = (2 + Math.random() * 3) + 's';
+      starsContainer.appendChild(star);
+    }
+  </script>
+</body>
+</html>
